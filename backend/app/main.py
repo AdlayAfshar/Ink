@@ -1,7 +1,8 @@
 from fastapi import FastAPI
+from backend.app.core.config import settings
 
 app = FastAPI(
-    title="Personal Glossary API",
+    title=settings.app_name,
     description="Backend API for a personal glossary and vocabulary learning platform.",
     version="0.1.0",
 )
