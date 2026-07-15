@@ -32,14 +32,14 @@ def test_user_create_rejects_short_password():
 
 def test_user_read_excludes_hashed_password():
     user = UserRead(
-        id=1,
+        id="7fd9281d-9d90-45b4-afbc-72d4ae6de819",
         email="user@example.com",
     )
 
     data = user.model_dump()
 
     assert data == {
-        "id": 1,
+        "id": "7fd9281d-9d90-45b4-afbc-72d4ae6de819",
         "email": "user@example.com",
     }
     assert "hashed_password" not in data
