@@ -48,21 +48,7 @@ def make_test_email() -> str:
     return f"register-test-{uuid4()}@example.com"
 
 
-def test_register_user_returns_201(client: TestClient):
-    email = make_test_email()
-
-    response = client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "password": "strong-password",
-        },
-    )
-
-    assert response.status_code == 201
-
-
-def test_register_user_returns_id_and_email(client: TestClient):
+def test_register_user_returns_201_with_id_and_email(client: TestClient):
     email = make_test_email()
 
     response = client.post(
