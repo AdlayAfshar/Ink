@@ -40,3 +40,25 @@ Example:
 APP_NAME=Personal Glossary API
 ENVIRONMENT=local
 ```
+
+## Database Migrations
+
+This project uses Alembic to manage database schema changes.
+
+Create a new migration:
+
+```bash
+alembic revision -m "create users table"
+```
+
+Apply the latest migrations:
+
+```bash
+alembic upgrade head
+```
+
+Revert the most recent migration:
+
+```bash
+alembic downgrade -1
+```
