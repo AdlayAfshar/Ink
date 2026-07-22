@@ -1,12 +1,15 @@
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.core.config import settings
 from backend.app.core.database import get_db
 from backend.app.modules.auth.models import User
-from backend.app.modules.auth.schemas import UserCreate, UserRead
-from backend.app.modules.auth.security import hash_password
+from backend.app.modules.auth.schemas import Token, UserCreate, UserLogin, UserRead
+from backend.app.modules.auth.security import create_access_token, hash_password, verify_password
 
 
 router = APIRouter(
@@ -53,3 +56,42 @@ def register_user(
     db.refresh(user)
 
     return user
+
+
+@router.post(
+    "/login",
+    response_model=Token,
+)
+def login_user(
+    payload: UserLogin,
+    db: Session = Depends(get_db),
+) -> Token:
+    user = db.scalar(
+        select(User).where(
+            User.email == str(payload.email)
+        )
+    )
+
+    if user is None or not verify_password(
+        payload.password,
+        user.hashed_password,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    expires_delta = timedelta(
+        minutes=settings.access_token_expire_minutes
+    )
+
+    access_token = create_access_token(
+        subject=user.id,
+        expires_delta=expires_delta,
+    )
+
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+    )

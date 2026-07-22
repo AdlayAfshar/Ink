@@ -1,5 +1,7 @@
 from uuid import uuid4
 
+from jose import jwt
+
 from collections.abc import Generator
 
 import pytest
@@ -7,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from backend.app.core.config import settings
 from backend.app.core.database import SessionLocal, get_db
 from backend.app.main import app
 from backend.app.modules.auth.models import User
@@ -46,6 +49,22 @@ def client(db: Session) -> Generator[TestClient, None, None]:
 
 def make_test_email() -> str:
     return f"register-test-{uuid4()}@example.com"
+
+def register_test_user(
+    client: TestClient,
+    email: str,
+    password: str,
+) -> dict:
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "password": password,
+        },
+    )
+
+    assert response.status_code == 201
+    return response.json()
 
 
 def test_register_user_returns_201_with_id_and_email(client: TestClient):
@@ -135,3 +154,131 @@ def test_register_user_rejects_duplicate_email(
     assert second_response.json() == {
         "detail": "Email already registered"
     }
+
+def test_login_with_valid_credentials_returns_token(
+    client: TestClient,
+):
+    email = make_test_email()
+    password = "strong-password"
+
+    register_test_user(
+        client=client,
+        email=email,
+        password=password,
+    )
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": email,
+            "password": password,
+        },
+    )
+
+    data = response.json()
+
+    assert response.status_code == 200
+    assert data["access_token"]
+    assert data["token_type"] == "bearer"
+
+def test_login_token_contains_subject_and_expiration(
+    client: TestClient,
+):
+    email = make_test_email()
+    password = "strong-password"
+
+    registered_user = register_test_user(
+        client=client,
+        email=email,
+        password=password,
+    )
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": email,
+            "password": password,
+        },
+    )
+
+    token = response.json()["access_token"]
+
+    payload = jwt.decode(
+        token,
+        settings.jwt_secret_key,
+        algorithms=[settings.jwt_algorithm],
+    )
+
+    assert payload["sub"] == registered_user["id"]
+    assert "exp" in payload
+
+def test_login_with_wrong_password_returns_401(
+    client: TestClient,
+):
+    email = make_test_email()
+
+    register_test_user(
+        client=client,
+        email=email,
+        password="correct-password",
+    )
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": email,
+            "password": "wrong-password",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid credentials"
+    }
+
+def test_login_with_unknown_email_returns_401(
+    client: TestClient,
+):
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": make_test_email(),
+            "password": "strong-password",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid credentials"
+    }
+
+
+def test_login_response_does_not_expose_password_data(
+    client: TestClient,
+):
+    email = make_test_email()
+    password = "strong-password"
+
+    register_test_user(
+        client=client,
+        email=email,
+        password=password,
+    )
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": email,
+            "password": password,
+        },
+    )
+
+    data = response.json()
+
+    assert response.status_code == 200
+    assert set(data.keys()) == {
+        "access_token",
+        "token_type",
+    }
+    assert "password" not in data
+    assert "hashed_password" not in data
