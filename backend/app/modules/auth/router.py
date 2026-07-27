@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -10,6 +12,7 @@ from backend.app.core.database import get_db
 from backend.app.modules.auth.models import User
 from backend.app.modules.auth.schemas import Token, UserCreate, UserLogin, UserRead
 from backend.app.modules.auth.security import create_access_token, hash_password, verify_password
+from backend.app.modules.auth.dependencies import get_current_user
 
 
 router = APIRouter(
@@ -95,3 +98,9 @@ def login_user(
         access_token=access_token,
         token_type="bearer",
     )
+
+@router.get("/me", response_model=UserRead)
+def read_me(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    return current_user
