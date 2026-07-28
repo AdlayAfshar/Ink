@@ -6,9 +6,10 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+# Replaced by OAuth2PasswordRequestForm (form data), so this schema is no longer needed.
+# class UserLogin(BaseModel):
+#     email: EmailStr
+#     password: str
 
 
 class Token(BaseModel):

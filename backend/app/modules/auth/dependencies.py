@@ -9,13 +9,14 @@ from backend.app.core.config import settings
 from backend.app.core.database import get_db
 from backend.app.modules.auth.models import User
 
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+DbSession = Annotated[Session, Depends(get_db)]
 
 
 def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
-    db: Annotated[Session, Depends(get_db)],
+    db: DbSession,
 ) -> User:
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
