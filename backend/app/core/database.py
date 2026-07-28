@@ -5,6 +5,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from backend.app.core.config import settings
 
+
 class Base(DeclarativeBase):
     pass
 
