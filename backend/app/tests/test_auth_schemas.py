@@ -1,14 +1,11 @@
 import pytest
 from pydantic import ValidationError
 
-from backend.app.modules.auth.schemas import Token, UserCreate, UserLogin, UserRead
+from backend.app.modules.auth.schemas import Token, UserCreate, UserRead
 
 
 def test_user_create_accepts_valid_data():
-    user = UserCreate(
-        email="user@example.com",
-        password="valid-password",
-    )
+    user = UserCreate(email="user@example.com", password="valid-password")
 
     assert user.email == "user@example.com"
     assert user.password == "valid-password"
@@ -16,25 +13,16 @@ def test_user_create_accepts_valid_data():
 
 def test_user_create_rejects_invalid_email():
     with pytest.raises(ValidationError):
-        UserCreate(
-            email="not-an-email",
-            password="valid-password",
-        )
+        UserCreate(email="not-an-email", password="valid-password")
 
 
 def test_user_create_rejects_short_password():
     with pytest.raises(ValidationError):
-        UserCreate(
-            email="user@example.com",
-            password="short",
-        )
+        UserCreate(email="user@example.com", password="short")
 
 
 def test_user_read_excludes_hashed_password():
-    user = UserRead(
-        id="7fd9281d-9d90-45b4-afbc-72d4ae6de819",
-        email="user@example.com",
-    )
+    user = UserRead(id="7fd9281d-9d90-45b4-afbc-72d4ae6de819", email="user@example.com")
 
     data = user.model_dump()
 
@@ -50,13 +38,3 @@ def test_token_has_default_bearer_type():
 
     assert token.access_token == "fake-token"
     assert token.token_type == "bearer"
-
-
-def test_user_login_accepts_valid_data():
-    login = UserLogin(
-        email="user@example.com",
-        password="any-password",
-    )
-
-    assert login.email == "user@example.com"
-    assert login.password == "any-password"

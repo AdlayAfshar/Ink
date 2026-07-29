@@ -1,6 +1,7 @@
 from backend.app.core.database import Base, SessionLocal, get_db
 from backend.app.modules.auth.models import User
 
+
 def test_database_module_loads():
     assert Base is not None
     assert SessionLocal is not None
