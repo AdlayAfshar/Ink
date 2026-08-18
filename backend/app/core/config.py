@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
+    dictionary_api_base_url: str = "https://api.dictionaryapi.dev/api/v2"
+
+    dictionary_api_timeout: float = 5.0
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
