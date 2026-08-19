@@ -14,8 +14,9 @@ from backend.app.modules.dictionary.models import (
     WordSynonym,
 )
 
-from backend.app.core.config import settings
+from backend.app.modules.glossary.models import UserWord, UserWordNote
 
+from backend.app.core.config import settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
