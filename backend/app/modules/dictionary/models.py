@@ -20,7 +20,12 @@ class Word(Base):
         server_default=sa.text("gen_random_uuid()"),
     )
     text: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    language: Mapped[str] = mapped_column(String(16), nullable=False, default="en")
+    language: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="en",
+        server_default="en",
+    )
     provider: Mapped[str | None] = mapped_column(String(100), nullable=True)
     provider_lookup_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -56,6 +61,11 @@ class WordDefinition(Base):
     )
     part_of_speech: Mapped[str | None] = mapped_column(String(50), nullable=True)
     definition: Mapped[str] = mapped_column(Text, nullable=False)
+    position: Mapped[int] = mapped_column(
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
     source: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -98,6 +108,13 @@ class WordExample(Base):
 
 class WordSynonym(Base):
     __tablename__ = "word_synonyms"
+    __table_args__ = (
+        UniqueConstraint(
+            "definition_id",
+            "synonym",
+            name="uq_word_synonyms_definition_id_synonym",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(
         SQL_UUID(as_uuid=False),
