@@ -5,8 +5,7 @@ class Settings(BaseSettings):
     app_name: str = "Personal Glossary API"
     environment: str = "local"
     debug: bool = False
-    # database_url: str = "postgresql+psycopg:///ink"
-    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/ink"
+    database_url: str = "postgresql+psycopg:///ink"
 
     jwt_secret_key: str = "development-only-secret-key"
     jwt_algorithm: str = "HS256"

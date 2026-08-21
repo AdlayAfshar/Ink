@@ -101,6 +101,7 @@ def test_me_returns_401_when_user_was_deleted(
     user = db.get(User, registered_user["id"])
 
     assert user is not None
+    assert user.email == email
 
     db.delete(user)
     db.commit()
