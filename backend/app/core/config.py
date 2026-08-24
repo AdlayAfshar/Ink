@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     environment: str = "local"
     debug: bool = False
     database_url: str = "postgresql+psycopg:///ink"
+    test_database_url: str = "postgresql+psycopg:///ink_test"
 
     jwt_secret_key: str = "development-only-secret-key"
     jwt_algorithm: str = "HS256"
