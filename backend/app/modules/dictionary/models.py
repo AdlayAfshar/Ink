@@ -28,6 +28,8 @@ class Word(Base):
     )
     provider: Mapped[str | None] = mapped_column(String(100), nullable=True)
     provider_lookup_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phonetic: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    audio_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -61,11 +63,7 @@ class WordDefinition(Base):
     )
     part_of_speech: Mapped[str | None] = mapped_column(String(50), nullable=True)
     definition: Mapped[str] = mapped_column(Text, nullable=False)
-    position: Mapped[int] = mapped_column(
-        nullable=False,
-        default=0,
-        server_default="0",
-    )
+    position: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
     source: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -76,6 +74,10 @@ class WordDefinition(Base):
     word: Mapped["Word"] = relationship(back_populates="definitions")
     examples: Mapped[list["WordExample"]] = relationship(back_populates="definition")
     synonyms: Mapped[list["WordSynonym"]] = relationship(back_populates="definition")
+    antonyms: Mapped[list["WordAntonym"]] = relationship(
+        back_populates="definition",
+        cascade="all, delete-orphan",
+    )
 
 
 class WordExample(Base):
@@ -140,5 +142,31 @@ class WordSynonym(Base):
     )
 
 
-#  Log in to PostgreSQL => terminal: psql ink
-#  View the current Alembic value => SQL: SELECT * FROM alembic_version;
+class WordAntonym(Base):
+    __tablename__ = "word_antonyms"
+    __table_args__ = (
+        UniqueConstraint(
+            "definition_id",
+            "antonym",
+            name="uq_word_antonyms_definition_id_antonym",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        SQL_UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("gen_random_uuid()"),
+    )
+    definition_id: Mapped[str] = mapped_column(
+        SQL_UUID(as_uuid=False),
+        ForeignKey("word_definitions.id"),
+        nullable=False,
+        index=True,
+    )
+    antonym: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    definition: Mapped["WordDefinition"] = relationship(back_populates="antonyms")
+
+
+# Log in to PostgreSQL => terminal: psql ink
+# View the current Alembic value => SQL: SELECT * FROM alembic_version;
