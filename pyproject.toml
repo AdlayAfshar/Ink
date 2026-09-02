@@ -18,16 +18,16 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
     "email-validator>=2.3.0",
-    "python-multipart (>=0.0.32,<0.0.33)",
-    "psycopg[binary] (>=3.3.4,<4.0.0)",
-    "bcrypt (==4.0.1)",
-    "httpx (>=0.28.1,<0.29.0)",
+    "python-multipart>=0.0.18",
+    "psycopg[binary]>=3.2.0,<4.0.0",
+    "bcrypt==4.0.1",
+    "httpx>=0.28.0,<0.29.0",
 ]
 
 [project.optional-dependencies]
 dev = [
+    "httpx2>=2.9.1,<3.0.0",
     "pytest>=8.2.0",
-    "httpx>=0.27.0",
 ]
 
 [tool.pytest.ini_options]
@@ -36,9 +36,3 @@ pythonpath = ["."]
 
 [tool.setuptools.packages.find]
 include = ["backend*"]
-
-[dependency-groups]
-dev = [
-    "pytest (>=9.1.1,<10.0.0)",
-    "httpx2 (>=2.9.1,<3.0.0)"
-]
