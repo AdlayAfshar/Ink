@@ -18,6 +18,7 @@ def normalize_word(word: str) -> str:
 
 
 def get_stored_word(db: Session, word: str) -> Word | None:
+    """Return a stored English word matching the normalized lookup value."""
     normalized_word = normalize_word(word)
 
     return db.scalar(
@@ -26,6 +27,7 @@ def get_stored_word(db: Session, word: str) -> Word | None:
 
 
 def dictionary_entry_from_word(word: Word) -> DictionaryEntry:
+    """Convert a persisted Word and its related records into a DictionaryEntry."""
     definitions: list[DictionaryDefinition] = []
 
     for stored_definition in sorted(word.definitions, key=lambda item: item.position):
@@ -57,6 +59,7 @@ def persist_dictionary_entry(
     entry: DictionaryEntry,
     provider_name: str,
 ) -> Word:
+    """Persist a resolved dictionary entry and de-duplicate its related data."""
     normalized_word = normalize_word(entry.word)
 
     word = Word(
@@ -154,6 +157,7 @@ def lookup_dictionary_entry(
     db: Session,
     provider: DictionaryProvider,
 ) -> DictionaryEntry:
+    """Return cached dictionary data or resolve, persist, and return provider data."""
     normalized_word = normalize_word(word)
 
     stored_word = get_stored_word(db, normalized_word)
