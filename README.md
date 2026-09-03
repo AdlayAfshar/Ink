@@ -50,7 +50,7 @@ The project is intended to build practical experience with:
 
 Requirements:
 
-- Python 3.11. The project includes `.python-version` for local version managers; Docker and CI should use the same major/minor version.
+- Python 3.11+. Python 3.11.x is recommended for local development via .python-version; Docker and CI should use Python 3.11.x for consistency.
 - `pip`
 
 This project uses `pyproject.toml` with standard `pip` editable installs. Poetry is not part of the supported workflow.

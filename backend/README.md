@@ -4,7 +4,7 @@ FastAPI backend for the Personal Glossary / Vocabulary Learning Platform.
 
 ## Dependency Workflow
 
-Use Python 3.11 and install dependencies from the root `pyproject.toml` with `pip`.
+Use Python 3.11+ (recommended: 3.11.x per `.python-version`) and install dependencies from the root `pyproject.toml` with `pip`.
 
 ```bash
 python -m venv .venv
