@@ -50,19 +50,29 @@ The project is intended to build practical experience with:
 
 Requirements:
 
-- Python 3.11+
+- Python 3.11+. Python 3.11.x is recommended for local development via .python-version; Docker and CI should use Python 3.11.x for consistency.
 - `pip`
 
-Install dependencies:
+This project uses `pyproject.toml` with standard `pip` editable installs. Poetry is not part of the supported workflow.
+
+Create and activate a virtual environment:
 
 ```bash
-pip install -e ".[dev]"
+python -m venv .venv
+source .venv/bin/activate
+```
+
+Install runtime and development dependencies:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 ```
 
 Run the API:
 
 ```bash
-uvicorn backend.app.main:app --reload
+python -m uvicorn backend.app.main:app --reload
 ```
 
 Health check:
@@ -74,7 +84,13 @@ curl http://127.0.0.1:8000/health
 Run tests:
 
 ```bash
-pytest
+python -m pytest
+```
+
+Verify form parsing support for the login route:
+
+```bash
+python -c "import multipart; print('python-multipart installed')"
 ```
 
 ## Current Status

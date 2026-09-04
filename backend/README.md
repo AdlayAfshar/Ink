@@ -2,10 +2,23 @@
 
 FastAPI backend for the Personal Glossary / Vocabulary Learning Platform.
 
+## Dependency Workflow
+
+Use Python 3.11+ (recommended: 3.11.x per `.python-version`) and install dependencies from the root `pyproject.toml` with `pip`.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+The project does not use Poetry. Runtime dependencies and the `dev` extra are declared in `pyproject.toml`.
+
 ## Run Locally
 
 ```bash
-uvicorn backend.app.main:app --reload
+python -m uvicorn backend.app.main:app --reload
 ```
 
 ## Current Endpoints
@@ -86,13 +99,13 @@ Persistence tests require a local PostgreSQL server and an existing `ink_test` d
 Run the full test suite from the project root:
 
 ```bash
-pytest
+python -m pytest
 ```
 
 Run only database isolation tests:
 
 ```bash
-pytest -k database_isolation -v
+python -m pytest -k database_isolation -v
 ```
 
 A successful isolation test confirms that the same unique-constrained value can be created in separate tests without conflicts because each test starts with clean database tables.
