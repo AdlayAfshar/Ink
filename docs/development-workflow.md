@@ -19,3 +19,14 @@ Use Architecture Decision Records for important technical choices. ADRs should c
 ## Iterative Milestones
 
 Prefer small milestones that produce working, reviewable increments. Each milestone should strengthen one part of the backend rather than adding broad unfinished scope.
+
+## Merge Requirements
+
+Pull requests targeting `main` must meet the following requirements before merging:
+
+- CI status check `test` must pass.
+- At least one pull request approval is required.
+- Code Owner review is required.
+- All review conversations must be resolved.
+- Force pushes are blocked.
+- Branch deletion is blocked.
