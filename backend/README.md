@@ -21,6 +21,62 @@ The project does not use Poetry. Runtime dependencies and the `dev` extra are de
 python -m uvicorn backend.app.main:app --reload
 ```
 
+## Docker Compose
+
+Docker Compose can run the FastAPI application and PostgreSQL together for local development.
+
+Start the API and PostgreSQL services:
+
+```bash
+docker compose up --build
+```
+
+Start the services in the background:
+
+```bash
+docker compose up -d
+```
+
+Apply database migrations inside the API container:
+
+```bash
+docker compose run --rm api alembic upgrade head
+```
+
+Check the current migration revision:
+
+```bash
+docker compose run --rm api alembic current
+```
+
+Verify the API health endpoint:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Stop the services:
+
+```bash
+docker compose down
+```
+
+The API connects to PostgreSQL through the Compose service hostname `postgres` instead of `localhost`.
+
+The Compose database connection is:
+
+```text
+postgresql+psycopg://postgres:postgres@postgres:5432/ink
+```
+
+PostgreSQL data is stored in the named `postgres_data` volume, so database data persists when containers are stopped and recreated.
+
+To remove the containers and delete the PostgreSQL volume:
+
+```bash
+docker compose down -v
+```
+
 ## Current Endpoints
 
 - `GET /`: service metadata.
