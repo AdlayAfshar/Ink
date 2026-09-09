@@ -96,3 +96,10 @@ python -c "import multipart; print('python-multipart installed')"
 ## Current Status
 
 Foundation phase. The repository contains initial documentation, project structure, GitHub workflow templates, and a minimal FastAPI application with root and health endpoints.
+
+## Run with Docker
+
+Build the Docker image:
+
+```bash
+docker build -t ink-api .
