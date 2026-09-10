@@ -25,6 +25,12 @@ python -m uvicorn backend.app.main:app --reload
 
 Docker Compose can run the FastAPI application and PostgreSQL together for local development.
 
+From the repository root, create the Compose environment file:
+
+```bash
+cp .env.example .env
+```
+
 Start the API and PostgreSQL services:
 
 ```bash
