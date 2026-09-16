@@ -11,6 +11,15 @@ Two cloud deployment paths were evaluated:
 
 The goal is to choose a practical first production deployment while still understanding the AWS alternative.
 
+Because one of the project's main goals is to learn backend engineering
+end to end, including cloud infrastructure and managed services, the
+project intentionally evaluates major cloud providers rather than a more
+streamlined PaaS such as Heroku.
+
+A simpler PaaS could reduce deployment complexity, but it would expose
+fewer of the infrastructure concepts that this project is intended to
+practise.
+
 ## GCP Option
 
 The GCP deployment would use:
