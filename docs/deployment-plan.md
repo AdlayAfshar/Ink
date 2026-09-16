@@ -14,7 +14,13 @@ Move database hosting to a managed PostgreSQL provider for staging or production
 
 ## Stage 4: Cloud Deployment
 
-Deploy the API to a cloud platform that supports Python web services, environment variables, health checks, and managed secrets.
+Use GCP as the first production deployment platform.
+
+Deploy the FastAPI container to Cloud Run and use Cloud SQL for managed PostgreSQL. Use the appropriate GCP services for container images, secrets, logging, and runtime configuration.
+
+AWS ECS Express Mode with RDS PostgreSQL has been evaluated as an alternative deployment path and is reserved for a future learning exercise.
+
+See `architecture-decisions/0005-choose-deployment-platform.md` for the platform comparison and decision.
 
 ## Stage 5: CI/CD
 
