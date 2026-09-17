@@ -16,11 +16,13 @@ Move database hosting to a managed PostgreSQL provider for staging or production
 
 Use GCP as the first production deployment platform.
 
-Deploy the FastAPI container to Cloud Run and use Cloud SQL for managed PostgreSQL. Use the appropriate GCP services for container images, secrets, logging, and runtime configuration.
+Deploy the FastAPI container to Cloud Run and use Cloud SQL for managed PostgreSQL. Use Artifact Registry for container images, Secret Manager for secrets, Cloud Logging for logs and monitoring, and IAM service accounts for permissions.
 
 AWS ECS Express Mode with RDS PostgreSQL has been evaluated as an alternative deployment path and is reserved for a future learning exercise.
 
-See `architecture-decisions/0005-choose-deployment-platform.md` for the platform comparison and decision.
+Render and Fly.io were also evaluated as simpler deployment alternatives, but GCP was selected because it provides a better balance between infrastructure learning and deployment complexity for Ink.
+
+See `architecture-decisions/0005-choose-deployment-platform.md` for the full platform comparison and decision.
 
 ## Stage 5: CI/CD
 
