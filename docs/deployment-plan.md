@@ -24,6 +24,98 @@ Render and Fly.io were also evaluated as simpler deployment alternatives, but GC
 
 See `architecture-decisions/0005-choose-deployment-platform.md` for the full platform comparison and decision.
 
+### Manual Cloud Run Deployment
+
+The backend was manually deployed to Google Cloud Run before introducing automated deployment.
+
+Google Cloud project:
+
+```text
+ink-backend-adlay
+```
+
+Region:
+
+```text
+europe-west2
+```
+
+Required Google Cloud APIs:
+
+```text
+Cloud Run
+Artifact Registry
+Cloud Build
+Secret Manager
+```
+
+A Docker repository named `ink` was created in Artifact Registry.
+
+The backend image was built for `linux/amd64` and pushed to:
+
+```text
+europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:latest
+```
+
+Because the development machine uses Apple Silicon, the image must explicitly target `linux/amd64` for Cloud Run:
+
+```bash
+docker buildx build \
+  --platform linux/amd64 \
+  -t europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:latest \
+  --push \
+  .
+```
+
+The production JWT secret is stored in Secret Manager as:
+
+```text
+ink-jwt-secret
+```
+
+The Cloud Run service account was granted the `Secret Manager Secret Accessor` role so the service can read the secret at runtime.
+
+The backend was deployed with:
+
+```bash
+gcloud run deploy ink-api \
+  --image=europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:latest \
+  --region=europe-west2 \
+  --allow-unauthenticated \
+  --set-env-vars=ENVIRONMENT=production,DEBUG=false,DATABASE_URL=postgresql+psycopg://placeholder:placeholder@placeholder/ink,CORS_ALLOWED_ORIGINS=https://example.com \
+  --set-secrets=JWT_SECRET_KEY=ink-jwt-secret:latest
+```
+
+`DATABASE_URL` and `CORS_ALLOWED_ORIGINS` are temporary placeholders until the managed PostgreSQL database and frontend are deployed.
+
+The deployed service is available at:
+
+```text
+https://ink-api-850771094851.europe-west2.run.app
+```
+
+The public health endpoint was verified with:
+
+```bash
+curl https://ink-api-850771094851.europe-west2.run.app/health
+```
+
+Response:
+
+```json
+{"status":"ok"}
+```
+
+Cloud Run logs were checked with:
+
+```bash
+gcloud run services logs read ink-api \
+  --region=europe-west2 \
+  --limit=30
+```
+
+The logs confirmed successful application startup, Uvicorn listening on port `8080`, and a `200 OK` response from `/health`.
+
 ## Stage 5: CI/CD
 
 Add automated tests, migration checks, and deployment workflows through GitHub Actions.
