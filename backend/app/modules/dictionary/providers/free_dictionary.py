@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 from urllib.parse import quote
 
@@ -10,6 +11,7 @@ from backend.app.modules.dictionary.exceptions import (
 )
 from backend.app.modules.dictionary.schemas import DictionaryDefinition, DictionaryEntry
 
+logger = logging.getLogger(__name__)
 
 class FreeDictionaryProvider:
     def __init__(
@@ -34,10 +36,16 @@ class FreeDictionaryProvider:
         try:
             response = self.client.get(url, timeout=self.timeout)
         except httpx.TimeoutException as exc:
+            logger.warning("Dictionary provider timeout word=%s", normalized_word)
             raise DictionaryProviderError(
                 "Dictionary provider request timed out"
             ) from exc
         except httpx.RequestError as exc:
+            logger.error(
+                "Dictionary provider request failed word=%s error_type=%s",
+                normalized_word,
+                type(exc).__name__,
+            )
             raise DictionaryProviderError(
                 "Could not connect to dictionary provider"
             ) from exc
@@ -46,6 +54,11 @@ class FreeDictionaryProvider:
             raise WordNotFoundError(f"Word not found: {normalized_word}")
 
         if response.status_code != 200:
+            logger.error(
+                "Dictionary provider returned unexpected status word=%s status_code=%s",
+                normalized_word,
+                response.status_code,
+            )
             raise DictionaryProviderError(
                 f"Dictionary provider returned status code {response.status_code}"
             )
@@ -53,6 +66,10 @@ class FreeDictionaryProvider:
         try:
             payload = response.json()
         except ValueError as exc:
+            logger.error(
+                "Dictionary provider returned invalid JSON word=%s",
+                normalized_word,
+            )
             raise DictionaryProviderError(
                 "Dictionary provider returned invalid JSON"
             ) from exc
@@ -62,7 +79,19 @@ class FreeDictionaryProvider:
                 payload=payload,
                 requested_word=normalized_word,
             )
+        except DictionaryProviderError:
+            logger.error(
+                "Dictionary provider response could not be normalized word=%s",
+                normalized_word,
+            )
+            raise
         except (TypeError, KeyError, ValidationError) as exc:
+            logger.error(
+                "Dictionary provider returned unexpected response "
+                "word=%s error_type=%s",
+                normalized_word,
+                type(exc).__name__,
+            )
             raise DictionaryProviderError(
                 "Dictionary provider returned an unexpected response"
             ) from exc

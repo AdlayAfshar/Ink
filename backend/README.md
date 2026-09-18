@@ -21,6 +21,50 @@ The project does not use Poetry. Runtime dependencies and the `dev` extra are de
 python -m uvicorn backend.app.main:app --reload
 ```
 
+## Logging
+
+The backend uses Python's standard `logging` module for application logs.
+
+Logs are written to standard output so they are visible both during local development and in Cloud Run.
+
+Application startup logs include the current environment:
+
+```text
+INFO backend.app.main Application starting environment=local
+```
+
+Dictionary provider failures are logged with useful diagnostic information such as the requested word, HTTP status code, or exception type.
+
+Sensitive values such as passwords, JWT secrets, database credentials, authorization headers, and access tokens must never be written to logs.
+
+### Local Logs
+
+Run the application locally:
+
+```bash
+python -m uvicorn backend.app.main:app --reload
+```
+
+Application logs are written directly to the terminal.
+
+### Cloud Run Logs
+
+View recent logs for the deployed Cloud Run service with:
+
+```bash
+gcloud run services logs read ink-api \
+  --region=europe-west2
+```
+
+To follow new logs as they are produced:
+
+```bash
+gcloud beta run services logs tail ink-api \
+  --region=europe-west2
+```
+
+Logs can also be inspected in Google Cloud Console through Cloud Run or Logs Explorer.
+
 ## Docker Compose
 
 Docker Compose can run the FastAPI application and PostgreSQL together for local development.
