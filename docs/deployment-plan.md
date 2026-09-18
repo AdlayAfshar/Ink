@@ -57,7 +57,7 @@ The backend image was built for `linux/amd64` and pushed to:
 europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:latest
 ```
 
-Because the development machine uses Apple Silicon, the image must explicitly target `linux/amd64` for Cloud Run:
+"Because the Cloud Run service is configured for x86_64 architecture, the image must explicitly target linux/amd64 when built from an Apple Silicon development machine to prevent a runtime deployment crash."
 
 ```bash
 docker buildx build \
