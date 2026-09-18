@@ -10,7 +10,84 @@ Add Docker and Docker Compose for repeatable local startup of the API and Postgr
 
 ## Stage 3: Managed PostgreSQL
 
-Move database hosting to a managed PostgreSQL provider for staging or production.
+Use Google Cloud SQL for the deployed PostgreSQL database.
+
+The Cloud SQL instance is:
+
+```text
+ink-postgres
+```
+
+The instance runs PostgreSQL 16 in the same region as the Cloud Run service:
+
+```text
+europe-west2
+```
+
+The application database is:
+
+```text
+ink
+```
+
+A dedicated database user named `ink_app` is used by the deployed backend instead of the PostgreSQL administrator account.
+
+Database credentials are not stored in the repository or directly in the Cloud Run configuration. The production database URL is stored in Google Secret Manager as:
+
+```text
+ink-database-url
+```
+
+Cloud Run exposes this secret to the application as:
+
+```text
+DATABASE_URL
+```
+
+The Cloud Run service is configured with the Cloud SQL connection:
+
+```text
+ink-backend-adlay:europe-west2:ink-postgres
+```
+
+The Cloud Run service account has the `Cloud SQL Client` role for database connectivity and the `Secret Manager Secret Accessor` role for reading runtime secrets.
+
+### Production Database Migrations
+
+Production migrations are run as a one-off Cloud Run Job rather than automatically when the API container starts.
+
+The migration job is:
+
+```text
+ink-db-migrate
+```
+
+It uses the same backend container image, `DATABASE_URL` secret, Cloud SQL connection, and service account as the deployed API.
+
+The job runs:
+
+```bash
+alembic upgrade head
+```
+
+Running migrations separately avoids having multiple Cloud Run API instances attempt to apply the same migration during application startup.
+
+Alembic escapes percent signs when copying `DATABASE_URL` into its configuration because URL-encoded database passwords may contain percent-encoded characters.
+
+### Credential Rotation
+
+Database credentials should be rotated without committing credentials to the repository.
+
+To rotate the application database credentials:
+
+1. Change the password for the `ink_app` Cloud SQL user.
+2. Build a new `DATABASE_URL` using the new password.
+3. Add the updated value as a new version of the `ink-database-url` Secret Manager secret.
+4. Redeploy the Cloud Run service so new instances use the updated secret.
+5. Verify database connectivity and the deployed authentication flow.
+6. Disable obsolete secret versions after the new credentials have been verified.
+
+The PostgreSQL administrator account is reserved for database administration and is not used by the application.
 
 ## Stage 4: Cloud Deployment
 
@@ -86,7 +163,7 @@ gcloud run deploy ink-api \
   --set-secrets=JWT_SECRET_KEY=ink-jwt-secret:latest
 ```
 
-`DATABASE_URL` and `CORS_ALLOWED_ORIGINS` are temporary placeholders until the managed PostgreSQL database and frontend are deployed.
+`CORS_ALLOWED_ORIGINS` remains a temporary placeholder until the frontend is deployed. The deployed backend now receives `DATABASE_URL` from the `ink-database-url` Secret Manager secret.
 
 The deployed service is available at:
 
