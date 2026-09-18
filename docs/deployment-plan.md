@@ -134,7 +134,7 @@ The backend image was built for `linux/amd64` and pushed to:
 europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:latest
 ```
 
-"Because the Cloud Run service is configured for x86_64 architecture, the image must explicitly target linux/amd64 when built from an Apple Silicon development machine to prevent a runtime deployment crash."
+Because the Cloud Run service is configured for x86_64 architecture, the image must explicitly target `linux/amd64` when built from an Apple Silicon development machine to prevent a runtime deployment crash.
 
 ```bash
 docker buildx build \
@@ -195,7 +195,92 @@ The logs confirmed successful application startup, Uvicorn listening on port `80
 
 ## Stage 5: CI/CD
 
-Add automated tests, migration checks, and deployment workflows through GitHub Actions.
+Use GitHub Actions to automatically test and deploy backend changes.
+
+### Continuous Integration
+
+The existing test workflow runs the backend test suite on pull requests and pushes to `main`.
+
+The test environment uses PostgreSQL 16 and a dedicated test database.
+
+Pull requests must pass CI before they can be merged into `main`.
+
+### Continuous Deployment
+
+The backend deployment workflow runs when changes are pushed to `main`, including changes merged through pull requests.
+
+The workflow:
+
+1. Runs the backend test suite.
+2. Authenticates to Google Cloud using Workload Identity Federation.
+3. Configures Docker authentication for Artifact Registry.
+4. Builds the backend Docker image for `linux/amd64`.
+5. Tags the image with the Git commit SHA.
+6. Pushes the image to Artifact Registry.
+7. Deploys the image to the `ink-api` Cloud Run service.
+8. Verifies the deployed service using the `/health` endpoint.
+
+The deployment job depends on the test job. If the tests fail, deployment does not run.
+
+GitHub Actions authenticates to Google Cloud using Workload Identity Federation instead of a long-lived service account key.
+
+The deployment service account is:
+
+```text
+github-deployer@ink-backend-adlay.iam.gserviceaccount.com
+```
+
+The Workload Identity configuration restricts access to the `AdlayAfshar/Ink` GitHub repository.
+
+Docker images are pushed to:
+
+```text
+europe-west2-docker.pkg.dev/ink-backend-adlay/ink
+```
+
+Each deployment uses the Git commit SHA as the image tag so that deployed images can be traced back to their source commits.
+
+### Deployment Verification
+
+After deployment, the workflow checks the public health endpoint.
+
+The equivalent manual check is:
+
+```bash
+curl --fail --show-error \
+  https://ink-api-850771094851.europe-west2.run.app/health
+```
+
+If the health check fails, the deployment workflow is marked as failed.
+
+### Rollback
+
+Cloud Run keeps previous revisions of the deployed service.
+
+Available revisions can be listed with:
+
+```bash
+gcloud run revisions list \
+  --service=ink-api \
+  --region=europe-west2
+```
+
+If a new deployment is unhealthy, traffic can be routed back to a previous healthy revision:
+
+```bash
+gcloud run services update-traffic ink-api \
+  --region=europe-west2 \
+  --to-revisions=REVISION_NAME=100
+```
+
+Replace `REVISION_NAME` with the previous healthy Cloud Run revision.
+
+After rollback, verify the service again:
+
+```bash
+curl --fail --show-error \
+  https://ink-api-850771094851.europe-west2.run.app/health
+```
 
 ## Stage 6: Monitoring and Logging
 
