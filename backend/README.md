@@ -193,3 +193,54 @@ Revert the most recent migration:
 ```bash
 alembic downgrade -1
 ```
+
+## Production Database
+
+The deployed backend uses Google Cloud SQL for PostgreSQL.
+
+The production database runs on the `ink-postgres` Cloud SQL instance in `europe-west2`. The application connects to the `ink` database using the dedicated `ink_app` database user.
+
+Production database credentials are not stored in the repository. The complete production `DATABASE_URL` is stored in Google Secret Manager as `ink-database-url` and exposed to the Cloud Run service as the `DATABASE_URL` environment variable.
+
+The Cloud Run service connects to Cloud SQL using:
+
+```text
+ink-backend-adlay:europe-west2:ink-postgres
+```
+
+### Production Migrations
+
+Production migrations are executed separately from the API service using the `ink-db-migrate` Cloud Run Job.
+
+The job runs:
+
+```bash
+alembic upgrade head
+```
+
+The migration job uses the same container image, Cloud SQL connection, and `DATABASE_URL` secret as the deployed backend.
+
+Do not automatically run migrations when the API container starts. Keeping migrations separate prevents multiple Cloud Run instances from attempting to modify the database schema at the same time.
+
+### Verifying Database Connectivity
+
+After deploying the API and applying migrations, verify the deployed authentication flow:
+
+1. Register a test user with `POST /auth/register`.
+2. Log in with `POST /auth/login`.
+3. Use the returned bearer token with `GET /auth/me`.
+
+A successful register, login, and authenticated read confirms that the deployed backend can write to and read from the managed PostgreSQL database.
+
+### Rotating Database Credentials
+
+To rotate production database credentials:
+
+1. Change the password for the `ink_app` Cloud SQL user.
+2. Build a new `DATABASE_URL` with the new password.
+3. Add it as a new version of the `ink-database-url` Secret Manager secret.
+4. Redeploy the Cloud Run service.
+5. Verify database connectivity and the authentication flow.
+6. Disable obsolete secret versions after the new credentials have been verified.
+
+Never commit production database credentials or the production `DATABASE_URL` to the repository.
