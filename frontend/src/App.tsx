@@ -12,6 +12,8 @@ function App() {
     data: result,
     error,
     isFetching,
+    isStale,
+    refetch,
   } = useQuery({
     queryKey: ["dictionary", searchWord],
     queryFn: () => lookupDictionary(searchWord),
@@ -26,6 +28,14 @@ function App() {
     const trimmedWord = word.trim();
 
     if (!trimmedWord) {
+      return;
+    }
+
+    if (trimmedWord === searchWord) {
+      if (isStale) {
+        void refetch();
+      }
+
       return;
     }
 
