@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     dictionary_api_base_url: str = "https://api.dictionaryapi.dev/api/v2"
     dictionary_api_timeout: float = 5.0
 
+    merriam_webster_api_base_url: str = (
+        "https://www.dictionaryapi.com/api/v3/references/learners/json"
+    )
+    merriam_webster_api_key: str | None = None
+    merriam_webster_api_timeout: float = 5.0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

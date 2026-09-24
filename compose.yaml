@@ -6,6 +6,9 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      MERRIAM_WEBSTER_API_KEY: ${MERRIAM_WEBSTER_API_KEY}
+      MERRIAM_WEBSTER_API_BASE_URL: ${MERRIAM_WEBSTER_API_BASE_URL:-https://www.dictionaryapi.com/api/v3/references/learners/json}
+      MERRIAM_WEBSTER_API_TIMEOUT: ${MERRIAM_WEBSTER_API_TIMEOUT:-5.0}
     depends_on:
       postgres:
         condition: service_healthy
