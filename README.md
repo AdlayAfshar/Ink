@@ -50,7 +50,7 @@ The project is intended to build practical experience with:
 
 Requirements:
 
-- Python 3.11+. Python 3.11.x is recommended for local development via .python-version; Docker and CI should use Python 3.11.x for consistency.
+- Python 3.11+. Python 3.11.x is recommended for local development via `.python-version`; Docker and CI should use Python 3.11.x for consistency.
 - `pip`
 
 This project uses `pyproject.toml` with standard `pip` editable installs. Poetry is not part of the supported workflow.
@@ -93,6 +93,74 @@ Verify form parsing support for the login route:
 python -c "import multipart; print('python-multipart installed')"
 ```
 
+## Local Frontend Setup
+
+Requirements:
+
+- Node.js
+- npm
+
+Install frontend dependencies:
+
+```bash
+cd frontend
+npm install
+```
+
+Create a `frontend/.env` file with the backend API URL:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+Run the frontend:
+
+```bash
+npm run dev
+```
+
+The frontend is available at:
+
+```text
+http://localhost:5173
+```
+
+Build the frontend:
+
+```bash
+npm run build
+```
+
+Run the frontend linter:
+
+```bash
+npm run lint
+```
+
+## Run Frontend and Backend Together
+
+Start the backend from the repository root:
+
+```bash
+python -m uvicorn backend.app.main:app --reload
+```
+
+In a separate terminal, start the frontend:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The local services are available at:
+
+```text
+Frontend: http://localhost:5173
+Backend:  http://localhost:8000
+```
+
+The frontend sends dictionary lookup requests to the backend using the API URL configured by `VITE_API_BASE_URL`.
+
 ## Current Status
 
 Foundation phase. The repository contains initial documentation, project structure, GitHub workflow templates, and a minimal FastAPI application with root and health endpoints.
@@ -103,3 +171,4 @@ Build the Docker image:
 
 ```bash
 docker build -t ink-api .
+```
