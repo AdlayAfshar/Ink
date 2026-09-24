@@ -152,16 +152,18 @@ Create a `.env` file in the `backend` directory to override the defaults.
 | --- | --- | --- |
 | `APP_NAME` | `Personal Glossary API` | The application name. |
 | `ENVIRONMENT` | `local` | The application environment. |
-| `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/ink` | PostgreSQL connection URL used by the application. |
-| `TEST_DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/ink_test` | Dedicated PostgreSQL database used by tests. |
+| `DATABASE_URL` | `postgresql+psycopg:///ink` | PostgreSQL connection URL used by the application. |
+| `TEST_DATABASE_URL` | `postgresql+psycopg:///ink_test` | Dedicated PostgreSQL database used by tests. |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Comma-separated list of frontend origins allowed to call the API. |
 
 Example:
 
 ```env
 APP_NAME=Personal Glossary API
 ENVIRONMENT=local
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/ink
-TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/ink_test
+DATABASE_URL=postgresql+psycopg:///ink
+TEST_DATABASE_URL=postgresql+psycopg:///ink_test
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
 ## Test Database
@@ -191,7 +193,7 @@ CREATE DATABASE ink_test;
 The default test database connection is:
 
 ```text
-postgresql+psycopg://postgres:postgres@localhost:5432/ink_test
+postgresql+psycopg:///ink_test
 ```
 
 The pytest database fixture creates all SQLAlchemy tables before each test and drops them after each test. This keeps persistence tests isolated and prevents state from leaking between tests.
@@ -288,3 +290,23 @@ To rotate production database credentials:
 6. Disable obsolete secret versions after the new credentials have been verified.
 
 Never commit production database credentials or the production `DATABASE_URL` to the repository.
+
+## CORS Configuration
+
+CORS allowed origins are configured through the `CORS_ALLOWED_ORIGINS` environment variable.
+
+For local development:
+
+```env
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+For production, set this variable to the deployed frontend origin:
+
+```env
+CORS_ALLOWED_ORIGINS=https://your-frontend-domain.example.com
+```
+
+Multiple origins can be provided as a comma-separated list.
+
+Production configuration must use explicit origins and must not use `*` when credentials are enabled.
