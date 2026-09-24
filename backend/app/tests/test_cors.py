@@ -1,4 +1,5 @@
 import importlib
+from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,7 +9,9 @@ from backend.app.core import config
 
 
 @pytest.fixture
-def cors_client(monkeypatch: pytest.MonkeyPatch):
+def cors_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[TestClient, None, None]:
     monkeypatch.setenv(
         "CORS_ALLOWED_ORIGINS",
         "http://test-frontend.example.com",
@@ -20,6 +23,7 @@ def cors_client(monkeypatch: pytest.MonkeyPatch):
     with TestClient(main.app) as client:
         yield client
 
+    monkeypatch.undo()
     importlib.reload(config)
     importlib.reload(main)
 
