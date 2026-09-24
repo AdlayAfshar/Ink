@@ -3,8 +3,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.main import app
-from backend.app.modules.dictionary.dependencies import get_dictionary_provider
-from backend.app.modules.dictionary.exceptions import DictionaryProviderError
+from backend.app.modules.dictionary.dependencies import (
+    get_dictionary_provider,
+    get_fallback_dictionary_provider,
+)
+from backend.app.modules.dictionary.exceptions import (
+    DictionaryProviderError,
+    WordNotFoundError,
+)
 from backend.app.modules.dictionary.models import (
     Word,
     WordAntonym,
@@ -66,12 +72,26 @@ class DuplicateDictionaryProvider:
 
 
 class FailingDictionaryProvider:
+    def __init__(self) -> None:
+        self.call_count = 0
+
     def lookup(self, word: str) -> DictionaryEntry:
+        self.call_count += 1
         raise DictionaryProviderError("Provider failed")
+
+
+class WordNotFoundDictionaryProvider:
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    def lookup(self, word: str) -> DictionaryEntry:
+        self.call_count += 1
+        raise WordNotFoundError("Word not found")
 
 
 def test_lookup_word_returns_dictionary_entry(client: TestClient) -> None:
     app.dependency_overrides[get_dictionary_provider] = lambda: FakeDictionaryProvider()
+    app.dependency_overrides[get_fallback_dictionary_provider] = lambda: None
 
     response = client.get("/dictionary/lookup/book")
 
@@ -94,6 +114,7 @@ def test_lookup_word_returns_dictionary_entry(client: TestClient) -> None:
 
 def test_lookup_word_returns_404_when_word_not_found(client: TestClient) -> None:
     app.dependency_overrides[get_dictionary_provider] = lambda: FakeDictionaryProvider()
+    app.dependency_overrides[get_fallback_dictionary_provider] = lambda: None
 
     response = client.get("/dictionary/lookup/missing")
 
@@ -105,6 +126,7 @@ def test_lookup_word_returns_502_when_provider_fails(client: TestClient) -> None
     app.dependency_overrides[get_dictionary_provider] = lambda: (
         FailingDictionaryProvider()
     )
+    app.dependency_overrides[get_fallback_dictionary_provider] = lambda: None
 
     response = client.get("/dictionary/lookup/book")
 
@@ -119,6 +141,7 @@ def test_dictionary_lookup_persists_provider_result(
     provider = TrackingDictionaryProvider()
 
     app.dependency_overrides[get_dictionary_provider] = lambda: provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = lambda: None
 
     response = client.get("/dictionary/lookup/book")
 
@@ -168,6 +191,7 @@ def test_dictionary_lookup_uses_database_cache(client: TestClient) -> None:
     provider = TrackingDictionaryProvider()
 
     app.dependency_overrides[get_dictionary_provider] = lambda: provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = lambda: None
 
     first_response = client.get("/dictionary/lookup/book")
     second_response = client.get("/dictionary/lookup/book")
@@ -200,6 +224,7 @@ def test_dictionary_lookup_normalizes_word_before_cache_lookup(
     provider = TrackingDictionaryProvider()
 
     app.dependency_overrides[get_dictionary_provider] = lambda: provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = lambda: None
 
     first_response = client.get("/dictionary/lookup/Book")
     second_response = client.get("/dictionary/lookup/book")
@@ -223,6 +248,7 @@ def test_dictionary_lookup_provider_failure_does_not_persist_data(
     provider = FailingDictionaryProvider()
 
     app.dependency_overrides[get_dictionary_provider] = lambda: provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = lambda: None
 
     response = client.get("/dictionary/lookup/failure")
 
@@ -240,6 +266,7 @@ def test_dictionary_lookup_is_idempotent(
     provider = TrackingDictionaryProvider()
 
     app.dependency_overrides[get_dictionary_provider] = lambda: provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = lambda: None
 
     first_response = client.get("/dictionary/lookup/book")
     second_response = client.get("/dictionary/lookup/book")
@@ -273,6 +300,7 @@ def test_dictionary_lookup_deduplicates_provider_data(
     provider = DuplicateDictionaryProvider()
 
     app.dependency_overrides[get_dictionary_provider] = lambda: provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = lambda: None
 
     response = client.get("/dictionary/lookup/book")
 
@@ -291,3 +319,141 @@ def test_dictionary_lookup_deduplicates_provider_data(
     assert example_count == 1
     assert synonym_count == 2
     assert antonym_count == 2
+
+
+def test_dictionary_lookup_does_not_call_fallback_when_primary_succeeds(
+    client: TestClient,
+) -> None:
+    primary_provider = TrackingDictionaryProvider()
+    fallback_provider = TrackingDictionaryProvider()
+
+    app.dependency_overrides[get_dictionary_provider] = lambda: primary_provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = (
+        lambda: fallback_provider
+    )
+
+    response = client.get("/dictionary/lookup/book")
+
+    assert response.status_code == 200
+    assert primary_provider.call_count == 1
+    assert fallback_provider.call_count == 0
+
+
+def test_dictionary_lookup_uses_fallback_when_primary_fails(
+    client: TestClient,
+) -> None:
+    primary_provider = FailingDictionaryProvider()
+    fallback_provider = TrackingDictionaryProvider()
+
+    app.dependency_overrides[get_dictionary_provider] = lambda: primary_provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = (
+        lambda: fallback_provider
+    )
+
+    response = client.get("/dictionary/lookup/book")
+
+    assert response.status_code == 200
+    assert primary_provider.call_count == 1
+    assert fallback_provider.call_count == 1
+    assert fallback_provider.looked_up_words == ["book"]
+
+
+def test_dictionary_lookup_does_not_call_fallback_when_word_not_found(
+    client: TestClient,
+) -> None:
+    primary_provider = WordNotFoundDictionaryProvider()
+    fallback_provider = TrackingDictionaryProvider()
+
+    app.dependency_overrides[get_dictionary_provider] = lambda: primary_provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = (
+        lambda: fallback_provider
+    )
+
+    response = client.get("/dictionary/lookup/missing")
+
+    assert response.status_code == 404
+    assert primary_provider.call_count == 1
+    assert fallback_provider.call_count == 0
+
+
+def test_dictionary_lookup_persists_fallback_result(
+    client: TestClient,
+    db: Session,
+) -> None:
+    primary_provider = FailingDictionaryProvider()
+    fallback_provider = TrackingDictionaryProvider()
+
+    app.dependency_overrides[get_dictionary_provider] = lambda: primary_provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = (
+        lambda: fallback_provider
+    )
+
+    response = client.get("/dictionary/lookup/book")
+
+    assert response.status_code == 200
+    assert primary_provider.call_count == 1
+    assert fallback_provider.call_count == 1
+
+    word = db.scalar(
+        select(Word).where(
+            Word.text == "book",
+            Word.language == "en",
+        )
+    )
+
+    assert word is not None
+    assert word.provider == "TrackingDictionaryProvider"
+    assert word.provider_lookup_key == "book"
+
+
+def test_dictionary_lookup_cache_skips_primary_and_fallback(
+    client: TestClient,
+) -> None:
+    initial_provider = TrackingDictionaryProvider()
+
+    app.dependency_overrides[get_dictionary_provider] = lambda: initial_provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = lambda: None
+
+    first_response = client.get("/dictionary/lookup/book")
+
+    assert first_response.status_code == 200
+    assert initial_provider.call_count == 1
+
+    primary_provider = TrackingDictionaryProvider()
+    fallback_provider = TrackingDictionaryProvider()
+
+    app.dependency_overrides[get_dictionary_provider] = lambda: primary_provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = (
+        lambda: fallback_provider
+    )
+
+    second_response = client.get("/dictionary/lookup/book")
+
+    assert second_response.status_code == 200
+    assert primary_provider.call_count == 0
+    assert fallback_provider.call_count == 0
+
+
+def test_dictionary_lookup_returns_502_when_primary_and_fallback_fail(
+    client: TestClient,
+    db: Session,
+) -> None:
+    primary_provider = FailingDictionaryProvider()
+    fallback_provider = FailingDictionaryProvider()
+
+    app.dependency_overrides[get_dictionary_provider] = lambda: primary_provider
+    app.dependency_overrides[get_fallback_dictionary_provider] = (
+        lambda: fallback_provider
+    )
+
+    response = client.get("/dictionary/lookup/book")
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Dictionary provider unavailable"}
+
+    assert primary_provider.call_count == 1
+    assert fallback_provider.call_count == 1
+
+    word = db.scalar(select(Word).where(Word.text == "book"))
+
+    assert word is None

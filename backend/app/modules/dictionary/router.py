@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.modules.dictionary.dependencies import get_dictionary_provider
+from backend.app.modules.dictionary.dependencies import (
+    get_dictionary_provider,
+    get_fallback_dictionary_provider,
+)
 from backend.app.modules.dictionary.exceptions import (
     DictionaryProviderError,
     WordNotFoundError,
@@ -19,15 +22,26 @@ DbSession = Annotated[Session, Depends(get_db)]
 
 DictionaryProviderDep = Annotated[DictionaryProvider, Depends(get_dictionary_provider)]
 
+FallbackDictionaryProviderDep = Annotated[
+    DictionaryProvider | None,
+    Depends(get_fallback_dictionary_provider),
+]
+
 
 @router.get("/lookup/{word}", response_model=DictionaryEntry)
 def lookup_word(
     word: str,
     provider: DictionaryProviderDep,
+    fallback_provider: FallbackDictionaryProviderDep,
     db: DbSession,
 ) -> DictionaryEntry:
     try:
-        return lookup_dictionary_entry(word=word, db=db, provider=provider)
+        return lookup_dictionary_entry(
+            word=word,
+            db=db,
+            provider=provider,
+            fallback_provider=fallback_provider,
+        )
     except WordNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

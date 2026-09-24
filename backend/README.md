@@ -33,9 +33,9 @@ Application startup logs include the current environment:
 INFO backend.app.main Application starting environment=local
 ```
 
-Dictionary provider failures are logged with useful diagnostic information such as the requested word, HTTP status code, or exception type.
+Dictionary provider failures are logged with useful diagnostic information such as the requested word, HTTP status code, exception type, and fallback provider usage.
 
-Sensitive values such as passwords, JWT secrets, database credentials, authorization headers, and access tokens must never be written to logs.
+Sensitive values such as passwords, JWT secrets, database credentials, API keys, authorization headers, and access tokens must never be written to logs.
 
 ### Local Logs
 
@@ -155,6 +155,9 @@ Create a `.env` file in the `backend` directory to override the defaults.
 | `DATABASE_URL` | `postgresql+psycopg:///ink` | PostgreSQL connection URL used by the application. |
 | `TEST_DATABASE_URL` | `postgresql+psycopg:///ink_test` | Dedicated PostgreSQL database used by tests. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Comma-separated list of frontend origins allowed to call the API. |
+| `MERRIAM_WEBSTER_API_BASE_URL` | `https://www.dictionaryapi.com/api/v3/references/learners/json` | Base URL for the Merriam-Webster Learner's Dictionary API used as the fallback dictionary provider. |
+| `MERRIAM_WEBSTER_API_KEY` | None | API key used to authenticate requests to the Merriam-Webster fallback provider. |
+| `MERRIAM_WEBSTER_API_TIMEOUT` | `5.0` | Timeout in seconds for requests to the Merriam-Webster fallback provider. |
 
 Example:
 
@@ -164,7 +167,20 @@ ENVIRONMENT=local
 DATABASE_URL=postgresql+psycopg:///ink
 TEST_DATABASE_URL=postgresql+psycopg:///ink_test
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+MERRIAM_WEBSTER_API_KEY=
 ```
+
+The Free Dictionary API is the primary external dictionary provider.
+
+Merriam-Webster Learner's Dictionary is the fallback provider. It is used when the primary provider fails because of an upstream service error, timeout, or connection failure.
+
+A successful response from the primary provider does not trigger the fallback provider. A word-not-found response from the primary provider also does not trigger fallback and continues to produce the normal `404` response.
+
+Dictionary lookups remain database-first. If a word is already stored locally, the stored entry is returned without calling either external provider. Successful results from either the primary or fallback provider are persisted for future lookups.
+
+The fallback provider is optional. If `MERRIAM_WEBSTER_API_KEY` is not configured, dictionary lookups continue to use only the primary Free Dictionary provider.
+
+Never commit a real Merriam-Webster API key to the repository. Store the key in local environment configuration for development and use a secret manager for deployed environments.
 
 ## Test Database
 

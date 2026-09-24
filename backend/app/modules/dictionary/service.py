@@ -1,7 +1,13 @@
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.modules.dictionary.exceptions import (
+    DictionaryProviderError,
+    WordNotFoundError,
+)
 from backend.app.modules.dictionary.models import (
     Word,
     WordAntonym,
@@ -11,6 +17,8 @@ from backend.app.modules.dictionary.models import (
 )
 from backend.app.modules.dictionary.providers.base import DictionaryProvider
 from backend.app.modules.dictionary.schemas import DictionaryDefinition, DictionaryEntry
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_word(word: str) -> str:
@@ -156,6 +164,7 @@ def lookup_dictionary_entry(
     word: str,
     db: Session,
     provider: DictionaryProvider,
+    fallback_provider: DictionaryProvider | None = None,
 ) -> DictionaryEntry:
     """Return cached dictionary data or resolve, persist, and return provider data."""
     normalized_word = normalize_word(word)
@@ -165,14 +174,33 @@ def lookup_dictionary_entry(
     if stored_word is not None:
         return dictionary_entry_from_word(stored_word)
 
-    entry = provider.lookup(normalized_word)
+    provider_used = provider
+
+    try:
+        entry = provider.lookup(normalized_word)
+    except WordNotFoundError:
+        raise
+    except DictionaryProviderError:
+        if fallback_provider is None:
+            raise
+
+        logger.warning(
+            "Primary dictionary provider failed "
+            "word=%s primary_provider=%s fallback_provider=%s",
+            normalized_word,
+            provider.__class__.__name__,
+            fallback_provider.__class__.__name__,
+        )
+
+        entry = fallback_provider.lookup(normalized_word)
+        provider_used = fallback_provider
 
     existing_word = get_stored_word(db, entry.word)
 
     if existing_word is not None:
         return dictionary_entry_from_word(existing_word)
 
-    provider_name = provider.__class__.__name__
+    provider_name = provider_used.__class__.__name__
 
     try:
         persist_dictionary_entry(db=db, entry=entry, provider_name=provider_name)

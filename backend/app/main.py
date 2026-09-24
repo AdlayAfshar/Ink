@@ -14,6 +14,7 @@ configure_logging()
 
 logger = logging.getLogger(__name__)
 
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     logger.info("Application starting environment=%s", settings.environment)
@@ -36,6 +37,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(dictionary_router)
+
 
 @app.get("/")
 def read_root() -> dict[str, str]:
