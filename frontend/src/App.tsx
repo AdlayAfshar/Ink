@@ -1,75 +1,45 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+
 import "./App.css";
-
-type DictionaryDefinition = {
-  part_of_speech: string | null;
-  definition: string;
-  example: string | null;
-  synonyms: string[];
-  antonyms: string[];
-};
-
-type DictionaryEntry = {
-  word: string;
-  phonetic: string | null;
-  audio_url: string | null;
-  definitions: DictionaryDefinition[];
-};
+import { lookupDictionary } from "./api/dictionary";
 
 function App() {
   const [word, setWord] = useState("");
-  const [result, setResult] = useState<DictionaryEntry | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [searchWord, setSearchWord] = useState("");
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  const {
+    data: result,
+    error,
+    isFetching,
+    isStale,
+    refetch,
+  } = useQuery({
+    queryKey: ["dictionary", searchWord],
+    queryFn: () => lookupDictionary(searchWord),
+    enabled: Boolean(searchWord),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const searchWord = word.trim();
+    const trimmedWord = word.trim();
 
-    if (!searchWord) {
+    if (!trimmedWord) {
       return;
     }
 
-    setLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-
-      if (!apiBaseUrl) {
-        throw new Error("VITE_API_BASE_URL is not configured");
+    if (trimmedWord === searchWord) {
+      if (isStale) {
+        void refetch();
       }
 
-      const response = await fetch(
-        `${apiBaseUrl}/dictionary/lookup/${encodeURIComponent(searchWord)}`,
-      );
-
-      if (response.status === 404) {
-        throw new Error("Word not found");
-      }
-
-      if (response.status === 502) {
-        throw new Error("Dictionary service is temporarily unavailable");
-      }
-
-      if (!response.ok) {
-        throw new Error("Unable to search for this word");
-      }
-
-      const data: DictionaryEntry = await response.json();
-
-      setResult(data);
-    } catch (error) {
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError("Something went wrong");
-      }
-    } finally {
-      setLoading(false);
+      return;
     }
+
+    setSearchWord(trimmedWord);
   }
 
   return (
@@ -85,12 +55,12 @@ function App() {
           placeholder="Enter a word"
         />
 
-        <button type="submit" disabled={loading || !word.trim()}>
-          {loading ? "Searching..." : "Search"}
+        <button type="submit" disabled={isFetching || !word.trim()}>
+          {isFetching ? "Searching..." : "Search"}
         </button>
       </form>
 
-      {error && <p>{error}</p>}
+      {error && <p>{error.message}</p>}
 
       {result && (
         <section>
