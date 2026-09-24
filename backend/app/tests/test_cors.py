@@ -1,39 +1,33 @@
+import importlib
+
 import pytest
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
-from backend.app.core.config import Settings
+from backend.app import main
+from backend.app.core import config
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def cors_client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv(
         "CORS_ALLOWED_ORIGINS",
         "http://test-frontend.example.com",
     )
 
-    test_settings = Settings()
+    importlib.reload(config)
+    importlib.reload(main)
 
-    app = FastAPI()
+    with TestClient(main.app) as client:
+        yield client
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=test_settings.cors_allowed_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    @app.get("/health")
-    def health_check() -> dict[str, str]:
-        return {"status": "ok"}
-
-    return TestClient(app)
+    importlib.reload(config)
+    importlib.reload(main)
 
 
-def test_cors_preflight_allows_configured_origin(client: TestClient):
-    response = client.options(
+def test_cors_preflight_allows_configured_origin(
+    cors_client: TestClient,
+) -> None:
+    response = cors_client.options(
         "/health",
         headers={
             "Origin": "http://test-frontend.example.com",
@@ -48,8 +42,10 @@ def test_cors_preflight_allows_configured_origin(client: TestClient):
     )
 
 
-def test_cors_preflight_rejects_unknown_origin(client: TestClient):
-    response = client.options(
+def test_cors_preflight_rejects_unknown_origin(
+    cors_client: TestClient,
+) -> None:
+    response = cors_client.options(
         "/health",
         headers={
             "Origin": "https://not-allowed.example.com",
