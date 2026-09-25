@@ -28,7 +28,7 @@ This repository should eventually show:
 
 The first implementation will be a modular monolith. The backend is organized around modules such as `auth`, `dictionary`, `glossary`, `reviews`, and `tags`. Shared dictionary data, such as words and definitions, is separate from user-specific data, such as saved words, notes, tags, and review history.
 
-The system will start with a FastAPI backend and PostgreSQL database. Dictionary lookups will initially use the Free Dictionary API through a provider abstraction so the source can be replaced or extended later.
+The system uses a FastAPI backend and PostgreSQL database. Dictionary lookups are handled through a provider abstraction, with Free Dictionary as the primary provider and Merriam-Webster as a fallback provider.
 
 ## Learning Outcomes
 
@@ -161,14 +161,115 @@ Backend:  http://localhost:8000
 
 The frontend sends dictionary lookup requests to the backend using the API URL configured by `VITE_API_BASE_URL`.
 
+## Deployment
+
+The application is deployed on Google Cloud Platform, with both the frontend and backend running on Google Cloud Run.
+
+### Frontend
+
+The public React/Vite frontend is available at:
+
+```text
+https://ink-frontend-850771094851.europe-west2.run.app
+```
+
+The frontend is built as a production Docker image using a multi-stage build.
+
+The first stage uses Node.js to install dependencies and create the Vite production build. The resulting static files are then copied into an Nginx image, which serves the application on port `8080` for Cloud Run.
+
+The production backend URL is supplied through `VITE_API_BASE_URL` when the frontend image is built.
+
+The frontend container image is stored in Google Artifact Registry and deployed to the `ink-frontend` Cloud Run service.
+
+### Backend
+
+The production FastAPI backend is available at:
+
+```text
+https://ink-api-850771094851.europe-west2.run.app
+```
+
+The backend runs as the `ink-api` Google Cloud Run service.
+
+Production PostgreSQL is hosted on Google Cloud SQL.
+
+Sensitive production configuration, including the database URL, JWT secret, and Merriam-Webster API key, is stored in Google Cloud Secret Manager and exposed to the backend Cloud Run service as environment variables.
+
+### CORS
+
+The production backend allows browser requests from the deployed frontend origin:
+
+```text
+https://ink-frontend-850771094851.europe-west2.run.app
+```
+
+This allows the frontend Cloud Run service to make browser-based requests to the backend Cloud Run service.
+
+### Production Architecture
+
+```text
+Browser
+   |
+   v
+Cloud Run
+ink-frontend
+   |
+   v
+Cloud Run
+ink-api
+   |
+   v
+Cloud SQL
+PostgreSQL
+```
+
+Production secrets used by the backend are managed through Google Cloud Secret Manager.
+
+### Deployment Verification
+
+The production integration has been manually verified by:
+
+- Opening the public Cloud Run frontend
+- Searching for a dictionary word
+- Sending the lookup request to the production Cloud Run API
+- Receiving a successful API response
+- Confirming the backend CORS configuration allows the production frontend origin
+- Confirming the dictionary result is rendered correctly in the frontend
+
 ## Current Status
 
-Foundation phase. The repository contains initial documentation, project structure, GitHub workflow templates, and a minimal FastAPI application with root and health endpoints.
+The project includes a deployed FastAPI backend, managed PostgreSQL database, public React/Vite frontend, dictionary provider fallback, production CORS configuration, automated tests, continuous backend deployment, and production logging.
 
-## Run with Docker
+## Run Backend with Docker
 
-Build the Docker image:
+Build the backend Docker image:
 
 ```bash
 docker build -t ink-api .
+```
+
+## Run Frontend with Docker
+
+Build the frontend image with the backend API URL:
+
+```bash
+docker build \
+  --platform linux/amd64 \
+  --build-arg VITE_API_BASE_URL=http://localhost:8000 \
+  -t ink-frontend \
+  ./frontend
+```
+
+Run the frontend container:
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  ink-frontend
+```
+
+The containerized frontend is then available at:
+
+```text
+http://localhost:8080
 ```
