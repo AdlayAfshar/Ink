@@ -18,7 +18,7 @@ The Cloud SQL instance is:
 ink-postgres
 ```
 
-The instance runs PostgreSQL 16 in the same region as the Cloud Run service:
+The instance runs PostgreSQL 16 in the same region as the Cloud Run services:
 
 ```text
 europe-west2
@@ -38,13 +38,13 @@ Database credentials are not stored in the repository or directly in the Cloud R
 ink-database-url
 ```
 
-Cloud Run exposes this secret to the application as:
+Cloud Run exposes this secret to the backend as:
 
 ```text
 DATABASE_URL
 ```
 
-The Cloud Run service is configured with the Cloud SQL connection:
+The backend Cloud Run service is configured with the Cloud SQL connection:
 
 ```text
 ink-backend-adlay:europe-west2:ink-postgres
@@ -93,7 +93,7 @@ The PostgreSQL administrator account is reserved for database administration and
 
 Use GCP as the first production deployment platform.
 
-Deploy the FastAPI container to Cloud Run and use Cloud SQL for managed PostgreSQL. Use Artifact Registry for container images, Secret Manager for secrets, Cloud Logging for logs and monitoring, and IAM service accounts for permissions.
+Both the frontend and backend are deployed to Google Cloud Run. Cloud SQL provides managed PostgreSQL, Artifact Registry stores container images, Secret Manager stores backend secrets, Cloud Logging provides application logs, and IAM service accounts control access to Google Cloud resources.
 
 AWS ECS Express Mode with RDS PostgreSQL has been evaluated as an alternative deployment path and is reserved for a future learning exercise.
 
@@ -101,9 +101,7 @@ Render and Fly.io were also evaluated as simpler deployment alternatives, but GC
 
 See `architecture-decisions/0005-choose-deployment-platform.md` for the full platform comparison and decision.
 
-### Manual Cloud Run Deployment
-
-The backend was manually deployed to Google Cloud Run before introducing automated deployment.
+### Google Cloud Environment
 
 Google Cloud project:
 
@@ -117,31 +115,42 @@ Region:
 europe-west2
 ```
 
-Required Google Cloud APIs:
+Required Google Cloud APIs include:
 
 ```text
 Cloud Run
 Artifact Registry
 Cloud Build
 Secret Manager
+Cloud SQL
 ```
 
-A Docker repository named `ink` was created in Artifact Registry.
-
-The backend image was built for `linux/amd64` and pushed to:
+A Docker repository named `ink` is used in Artifact Registry:
 
 ```text
-europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:latest
+europe-west2-docker.pkg.dev/ink-backend-adlay/ink
 ```
 
-Because the Cloud Run service is configured for x86_64 architecture, the image must explicitly target `linux/amd64` when built from an Apple Silicon development machine to prevent a runtime deployment crash.
+Because deployment images target `linux/amd64`, images built from an Apple Silicon development machine explicitly use that platform to avoid architecture incompatibilities.
 
-```bash
-docker buildx build \
-  --platform linux/amd64 \
-  -t europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:latest \
-  --push \
-  .
+### Backend Deployment
+
+The FastAPI backend runs as the Cloud Run service:
+
+```text
+ink-api
+```
+
+The deployed backend is available at:
+
+```text
+https://ink-api-850771094851.europe-west2.run.app
+```
+
+Backend container images are stored at:
+
+```text
+europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api
 ```
 
 The production JWT secret is stored in Secret Manager as:
@@ -150,40 +159,50 @@ The production JWT secret is stored in Secret Manager as:
 ink-jwt-secret
 ```
 
-The Cloud Run service account was granted the `Secret Manager Secret Accessor` role so the service can read the secret at runtime.
-
-The backend was deployed with:
-
-```bash
-gcloud run deploy ink-api \
-  --image=europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:latest \
-  --region=europe-west2 \
-  --allow-unauthenticated \
-  --set-env-vars=ENVIRONMENT=production,DEBUG=false,DATABASE_URL=postgresql+psycopg://placeholder:placeholder@placeholder/ink,CORS_ALLOWED_ORIGINS=https://example.com \
-  --set-secrets=JWT_SECRET_KEY=ink-jwt-secret:latest
-```
-
-`CORS_ALLOWED_ORIGINS` remains a temporary placeholder until the frontend is deployed. The deployed backend now receives `DATABASE_URL` from the `ink-database-url` Secret Manager secret.
-
-The deployed service is available at:
+The production database URL is stored as:
 
 ```text
-https://ink-api-850771094851.europe-west2.run.app
+ink-database-url
 ```
 
-The public health endpoint was verified with:
+The Merriam-Webster API key used by the fallback dictionary provider is stored as:
+
+```text
+ink-merriam-webster-api-key
+```
+
+These secrets are exposed to the backend service as:
+
+```text
+JWT_SECRET_KEY
+DATABASE_URL
+MERRIAM_WEBSTER_API_KEY
+```
+
+The backend Cloud Run service account has the required Secret Manager and Cloud SQL permissions.
+
+The production backend is configured with:
+
+```text
+ENVIRONMENT=production
+DEBUG=false
+CORS_ALLOWED_ORIGINS=https://ink-frontend-850771094851.europe-west2.run.app
+```
+
+The public health endpoint can be verified with:
 
 ```bash
-curl https://ink-api-850771094851.europe-west2.run.app/health
+curl --fail --show-error \
+  https://ink-api-850771094851.europe-west2.run.app/health
 ```
 
-Response:
+Expected response:
 
 ```json
 {"status":"ok"}
 ```
 
-Cloud Run logs were checked with:
+Cloud Run logs can be checked with:
 
 ```bash
 gcloud run services logs read ink-api \
@@ -191,7 +210,111 @@ gcloud run services logs read ink-api \
   --limit=30
 ```
 
-The logs confirmed successful application startup, Uvicorn listening on port `8080`, and a `200 OK` response from `/health`.
+### Frontend Deployment
+
+The React/Vite frontend runs as a separate Cloud Run service:
+
+```text
+ink-frontend
+```
+
+The public frontend is available at:
+
+```text
+https://ink-frontend-850771094851.europe-west2.run.app
+```
+
+The frontend uses a multi-stage Docker build.
+
+The build stage uses Node.js to install dependencies and create the Vite production bundle. The runtime stage uses Nginx to serve the generated static files on port `8080`, which is compatible with Cloud Run.
+
+The frontend image is built with the production backend URL:
+
+```bash
+docker build \
+  --platform linux/amd64 \
+  --build-arg VITE_API_BASE_URL=https://ink-api-850771094851.europe-west2.run.app \
+  -t ink-frontend:test \
+  ./frontend
+```
+
+`VITE_API_BASE_URL` is a build-time variable because Vite embeds exposed environment variables into the generated frontend bundle.
+
+After local verification, the image can be tagged for Artifact Registry:
+
+```bash
+docker tag ink-frontend:test \
+  europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-frontend:latest
+```
+
+The image is pushed with:
+
+```bash
+docker push \
+  europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-frontend:latest
+```
+
+The frontend is deployed to Cloud Run with:
+
+```bash
+gcloud run deploy ink-frontend \
+  --image=europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-frontend:latest \
+  --region=europe-west2 \
+  --platform=managed \
+  --allow-unauthenticated \
+  --port=8080
+```
+
+The frontend does not contain backend credentials or other production secrets.
+
+### Production CORS
+
+The backend accepts browser requests from the production frontend origin:
+
+```text
+https://ink-frontend-850771094851.europe-west2.run.app
+```
+
+The production configuration is:
+
+```text
+CORS_ALLOWED_ORIGINS=https://ink-frontend-850771094851.europe-west2.run.app
+```
+
+Local frontend origins are not included in the production CORS configuration.
+
+### Production Architecture
+
+```text
+Browser
+   |
+   v
+Cloud Run
+ink-frontend
+   |
+   v
+Cloud Run
+ink-api
+   |
+   v
+Cloud SQL
+PostgreSQL
+```
+
+Backend secrets are provided through Google Secret Manager rather than stored in container images or committed configuration files.
+
+### Deployment Verification
+
+The production frontend and backend integration has been manually verified.
+
+Verification includes:
+
+1. Opening the public `ink-frontend` Cloud Run service.
+2. Searching for a dictionary word.
+3. Confirming the browser sends the request to the production `ink-api` service.
+4. Receiving a successful response from the backend.
+5. Confirming the backend allows the production frontend origin through CORS.
+6. Confirming the dictionary result renders correctly in the frontend.
 
 ## Stage 5: CI/CD
 
@@ -238,11 +361,13 @@ Docker images are pushed to:
 europe-west2-docker.pkg.dev/ink-backend-adlay/ink
 ```
 
-Each deployment uses the Git commit SHA as the image tag so that deployed images can be traced back to their source commits.
+Each automated backend deployment uses the Git commit SHA as the image tag so deployed backend images can be traced back to their source commits.
+
+Frontend deployment is currently manual.
 
 ### Deployment Verification
 
-After deployment, the workflow checks the public health endpoint.
+After backend deployment, the workflow checks the public health endpoint.
 
 The equivalent manual check is:
 
@@ -257,7 +382,7 @@ If the health check fails, the deployment workflow is marked as failed.
 
 Cloud Run keeps previous revisions of the deployed service.
 
-Available revisions can be listed with:
+Available backend revisions can be listed with:
 
 ```bash
 gcloud run revisions list \
@@ -265,7 +390,7 @@ gcloud run revisions list \
   --region=europe-west2
 ```
 
-If a new deployment is unhealthy, traffic can be routed back to a previous healthy revision:
+If a new backend deployment is unhealthy, traffic can be routed back to a previous healthy revision:
 
 ```bash
 gcloud run services update-traffic ink-api \
@@ -284,4 +409,6 @@ curl --fail --show-error \
 
 ## Stage 6: Monitoring and Logging
 
-Add structured logging, error tracking, request metrics, and database monitoring before treating the service as production-ready.
+The backend currently has basic production logging integrated with Cloud Run logs.
+
+Future production-readiness work can add structured logging, error tracking, request metrics, alerting, and database monitoring.
