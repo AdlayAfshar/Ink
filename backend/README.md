@@ -21,6 +21,14 @@ The project does not use Poetry. Runtime dependencies and the `dev` extra are de
 python -m uvicorn backend.app.main:app --reload
 ```
 
+Verify the API:
+
+```bash
+curl --fail --show-error http://127.0.0.1:8000/health
+```
+
+For the complete local, Docker, deployment, migration, logging, and rollback runbook, see [../docs/operations.md](../docs/operations.md).
+
 ## Logging
 
 The backend uses Python's standard `logging` module for application logs.
@@ -146,15 +154,21 @@ docker compose down -v
 
 The application configuration is managed through environment variables. If a variable is not provided, the default value defined in `app/core/config.py` will be used.
 
-Create a `.env` file in the `backend` directory to override the defaults.
+When running commands from the repository root, create a `.env` file in the repository root to override the defaults.
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `APP_NAME` | `Personal Glossary API` | The application name. |
 | `ENVIRONMENT` | `local` | The application environment. |
+| `DEBUG` | `false` | Enables debug behavior. Must remain `false` in production. |
 | `DATABASE_URL` | `postgresql+psycopg:///ink` | PostgreSQL connection URL used by the application. |
 | `TEST_DATABASE_URL` | `postgresql+psycopg:///ink_test` | Dedicated PostgreSQL database used by tests. |
+| `JWT_SECRET_KEY` | `development-only-secret-key` | Secret used to sign JWT access tokens. Must be replaced in production. |
+| `JWT_ALGORITHM` | `HS256` | JWT signing algorithm. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime in minutes. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Comma-separated list of frontend origins allowed to call the API. |
+| `DICTIONARY_API_BASE_URL` | `https://api.dictionaryapi.dev/api/v2` | Base URL for the primary Free Dictionary provider. |
+| `DICTIONARY_API_TIMEOUT` | `5.0` | Timeout in seconds for the primary dictionary provider. |
 | `MERRIAM_WEBSTER_API_BASE_URL` | `https://www.dictionaryapi.com/api/v3/references/learners/json` | Base URL for the Merriam-Webster Learner's Dictionary API used as the fallback dictionary provider. |
 | `MERRIAM_WEBSTER_API_KEY` | None | API key used to authenticate requests to the Merriam-Webster fallback provider. |
 | `MERRIAM_WEBSTER_API_TIMEOUT` | `5.0` | Timeout in seconds for requests to the Merriam-Webster fallback provider. |
@@ -164,8 +178,10 @@ Example:
 ```env
 APP_NAME=Personal Glossary API
 ENVIRONMENT=local
+DEBUG=false
 DATABASE_URL=postgresql+psycopg:///ink
 TEST_DATABASE_URL=postgresql+psycopg:///ink_test
+JWT_SECRET_KEY=replace-me
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 MERRIAM_WEBSTER_API_KEY=
 ```
@@ -241,8 +257,10 @@ This project uses Alembic to manage database schema changes.
 Create a new migration:
 
 ```bash
-alembic revision -m "create users table"
+alembic revision --autogenerate -m "describe schema change"
 ```
+
+Review the generated migration in `alembic/versions` before applying it.
 
 Apply the latest migrations:
 
@@ -255,6 +273,8 @@ Revert the most recent migration:
 ```bash
 alembic downgrade -1
 ```
+
+Use downgrades carefully. Production rollbacks should usually prefer a forward-fix migration unless the downgrade has been reviewed for data loss and a database backup or snapshot is available.
 
 ## Production Database
 
@@ -283,6 +303,14 @@ alembic upgrade head
 The migration job uses the same container image, Cloud SQL connection, and `DATABASE_URL` secret as the deployed backend.
 
 Do not automatically run migrations when the API container starts. Keeping migrations separate prevents multiple Cloud Run instances from attempting to modify the database schema at the same time.
+
+Run the production migration job manually with:
+
+```bash
+gcloud run jobs execute ink-db-migrate \
+  --region=europe-west2 \
+  --wait
+```
 
 ### Verifying Database Connectivity
 
