@@ -1,5 +1,7 @@
 # Deployment Plan
 
+This document records the deployment architecture and rollout plan. For day-to-day commands, incident handling, logs, rollback, and common failure cases, see `docs/operations.md`.
+
 ## Stage 1: Local Development
 
 Run the FastAPI app locally with a local PostgreSQL database. Keep configuration environment-based.
@@ -340,8 +342,10 @@ The workflow:
 4. Builds the backend Docker image for `linux/amd64`.
 5. Tags the image with the Git commit SHA.
 6. Pushes the image to Artifact Registry.
-7. Deploys the image to the `ink-api` Cloud Run service.
-8. Verifies the deployed service using the `/health` endpoint.
+7. Updates the `ink-db-migrate` Cloud Run Job to the same image.
+8. Runs `alembic upgrade head` through the migration job.
+9. Deploys the image to the `ink-api` Cloud Run service.
+10. Verifies the deployed service using the `/health` endpoint.
 
 The deployment job depends on the test job. If the tests fail, deployment does not run.
 

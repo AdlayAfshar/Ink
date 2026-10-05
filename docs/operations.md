@@ -1,0 +1,459 @@
+# Operations Guide
+
+This guide explains how to run, deploy, monitor, and recover Ink. It is the day-to-day runbook for local development, Docker development, Google Cloud deployment, database migrations, logs, rollback, and common failure cases.
+
+## Service Map
+
+| Component | Technology | Local URL | Production |
+| --- | --- | --- | --- |
+| Frontend | React, Vite, Nginx | `http://localhost:5173` or `http://localhost:8080` in Docker | `https://ink-frontend-850771094851.europe-west2.run.app` |
+| Backend | FastAPI, Uvicorn | `http://localhost:8000` | `https://ink-api-850771094851.europe-west2.run.app` |
+| Database | PostgreSQL 16 | local PostgreSQL or Compose `postgres` service | Cloud SQL `ink-postgres` |
+| Logs | stdout | terminal or `docker compose logs` | Cloud Run logs and Logs Explorer |
+
+## Local Development
+
+Use Python 3.11.x for backend development and Node.js with npm for frontend development.
+
+Create the backend environment:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+Create local environment files from the examples:
+
+```bash
+cp backend/app/.env.example .env
+cp frontend/.env.example frontend/.env
+```
+
+Create the local development database and apply migrations:
+
+```bash
+createdb ink
+alembic upgrade head
+```
+
+Run the backend:
+
+```bash
+python -m uvicorn backend.app.main:app --reload
+```
+
+Verify the backend:
+
+```bash
+curl --fail --show-error http://127.0.0.1:8000/health
+```
+
+Install and run the frontend in a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend reads `VITE_API_BASE_URL` from `frontend/.env`. For local development it should be:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+Run backend tests:
+
+```bash
+python -m pytest
+```
+
+Run frontend checks:
+
+```bash
+cd frontend
+npm run lint
+npm run build
+```
+
+## Docker Development
+
+The root `compose.yaml` starts the FastAPI backend and PostgreSQL together.
+
+Create the Compose environment file:
+
+```bash
+cp .env.example .env
+```
+
+Start the stack:
+
+```bash
+docker compose up --build
+```
+
+Apply database migrations inside the API container:
+
+```bash
+docker compose run --rm api alembic upgrade head
+```
+
+Verify the API:
+
+```bash
+curl --fail --show-error http://localhost:8000/health
+```
+
+Read container logs:
+
+```bash
+docker compose logs api
+docker compose logs postgres
+```
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+Remove containers and the local PostgreSQL volume when a clean database is needed:
+
+```bash
+docker compose down -v
+```
+
+Build and run the frontend container against a local backend:
+
+```bash
+docker build \
+  --platform linux/amd64 \
+  --build-arg VITE_API_BASE_URL=http://localhost:8000 \
+  -t ink-frontend:local \
+  ./frontend
+
+docker run --rm -p 8080:8080 ink-frontend:local
+```
+
+## Environment Variables
+
+Backend configuration is loaded by `backend.app.core.config.Settings`. Production values are provided through Cloud Run and Secret Manager.
+
+| Variable | Required in production | Default | Notes |
+| --- | --- | --- | --- |
+| `APP_NAME` | No | `Personal Glossary API` | Display name for the FastAPI app. |
+| `ENVIRONMENT` | Yes | `local` | Must be `production` in deployed Cloud Run. |
+| `DEBUG` | Yes | `false` | Must remain `false` in production. |
+| `DATABASE_URL` | Yes | `postgresql+psycopg:///ink` | Production value comes from Secret Manager secret `ink-database-url`. |
+| `TEST_DATABASE_URL` | No | `postgresql+psycopg:///ink_test` | Used only by tests. |
+| `JWT_SECRET_KEY` | Yes | development-only value | Production value comes from Secret Manager secret `ink-jwt-secret`. |
+| `JWT_ALGORITHM` | No | `HS256` | JWT signing algorithm. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `30` | Access token lifetime. |
+| `CORS_ALLOWED_ORIGINS` | Yes | local frontend origins | Production must be explicit and must not include `*` or localhost. |
+| `DICTIONARY_API_BASE_URL` | No | `https://api.dictionaryapi.dev/api/v2` | Primary dictionary provider. |
+| `DICTIONARY_API_TIMEOUT` | No | `5.0` | Primary dictionary provider timeout in seconds. |
+| `MERRIAM_WEBSTER_API_BASE_URL` | No | Learner's Dictionary API URL | Fallback provider. |
+| `MERRIAM_WEBSTER_API_KEY` | No | empty | Optional locally, stored as `ink-merriam-webster-api-key` in production. |
+| `MERRIAM_WEBSTER_API_TIMEOUT` | No | `5.0` | Fallback provider timeout in seconds. |
+
+Frontend configuration:
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | Yes | Build-time API base URL embedded into the Vite bundle. |
+
+Never commit real secrets or production database URLs.
+
+## Database Migrations
+
+Ink uses Alembic for schema migrations. Alembic reads `DATABASE_URL` from the same settings layer as the application.
+
+Create a migration after changing SQLAlchemy models:
+
+```bash
+alembic revision --autogenerate -m "describe schema change"
+```
+
+Review the generated file in `alembic/versions` before applying it. Autogenerated migrations can miss data migrations or produce operations that need manual cleanup.
+
+Apply migrations locally:
+
+```bash
+alembic upgrade head
+```
+
+Check the current local revision:
+
+```bash
+alembic current
+```
+
+Apply migrations in Docker Compose:
+
+```bash
+docker compose run --rm api alembic upgrade head
+```
+
+Production migrations run through the Cloud Run Job `ink-db-migrate`. The backend deployment workflow updates this job to the same image as the API, runs it, then deploys the service.
+
+Run the production migration job manually only after confirming the image and target database:
+
+```bash
+gcloud run jobs execute ink-db-migrate \
+  --region=europe-west2 \
+  --wait
+```
+
+Rollback warning: database downgrades can be destructive. Prefer a forward-fix migration for production incidents. Only run `alembic downgrade -1` after checking the migration code, understanding data loss risk, and taking a database backup or snapshot.
+
+## Backend Deployment
+
+Production backend deployment target:
+
+```text
+Service: ink-api
+Region: europe-west2
+Image: europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api
+Database: Cloud SQL ink-postgres, database ink
+```
+
+Build and push a backend image manually:
+
+```bash
+docker build \
+  --platform linux/amd64 \
+  -t europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:TAG \
+  .
+
+docker push \
+  europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:TAG
+```
+
+Update the migration job to the same image and run migrations:
+
+```bash
+gcloud run jobs update ink-db-migrate \
+  --region=europe-west2 \
+  --image=europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:TAG
+
+gcloud run jobs execute ink-db-migrate \
+  --region=europe-west2 \
+  --wait
+```
+
+Deploy the backend:
+
+```bash
+gcloud run deploy ink-api \
+  --image=europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-api:TAG \
+  --region=europe-west2 \
+  --platform=managed \
+  --allow-unauthenticated \
+  --port=8000
+```
+
+For the existing `ink-api` service, this updates the image while preserving the service's configured secrets, Cloud SQL connection, service account, and environment variables. For a first-time service creation, configure the Cloud SQL connection `ink-backend-adlay:europe-west2:ink-postgres`, `ENVIRONMENT=production`, `DEBUG=false`, production `CORS_ALLOWED_ORIGINS`, and the Secret Manager-backed variables `DATABASE_URL`, `JWT_SECRET_KEY`, and `MERRIAM_WEBSTER_API_KEY`.
+
+Verify deployment:
+
+```bash
+curl --fail --show-error \
+  https://ink-api-850771094851.europe-west2.run.app/health
+```
+
+The GitHub Actions backend deployment workflow performs the same high-level sequence on pushes to `main`: tests, build, push, update migration job, run migrations, deploy, and health-check.
+
+## Frontend Deployment
+
+Production frontend deployment target:
+
+```text
+Service: ink-frontend
+Region: europe-west2
+Image: europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-frontend
+```
+
+Build and push a frontend image:
+
+```bash
+docker build \
+  --platform linux/amd64 \
+  --build-arg VITE_API_BASE_URL=https://ink-api-850771094851.europe-west2.run.app \
+  -t europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-frontend:TAG \
+  ./frontend
+
+docker push \
+  europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-frontend:TAG
+```
+
+Deploy the frontend:
+
+```bash
+gcloud run deploy ink-frontend \
+  --image=europe-west2-docker.pkg.dev/ink-backend-adlay/ink/ink-frontend:TAG \
+  --region=europe-west2 \
+  --platform=managed \
+  --allow-unauthenticated \
+  --port=8080
+```
+
+Open the deployed frontend and run a dictionary lookup:
+
+```text
+https://ink-frontend-850771094851.europe-west2.run.app
+```
+
+## Health Checks
+
+Local backend:
+
+```bash
+curl --fail --show-error http://localhost:8000/health
+```
+
+Production backend:
+
+```bash
+curl --fail --show-error \
+  https://ink-api-850771094851.europe-west2.run.app/health
+```
+
+Expected response:
+
+```json
+{"status":"ok"}
+```
+
+The health endpoint confirms the API process is running. It does not currently prove database connectivity, so verify database-backed flows after migrations or configuration changes.
+
+## Logs and Debugging
+
+Local backend logs are written to the terminal running Uvicorn.
+
+Docker logs:
+
+```bash
+docker compose logs api
+docker compose logs postgres
+```
+
+Cloud Run backend logs:
+
+```bash
+gcloud run services logs read ink-api \
+  --region=europe-west2 \
+  --limit=50
+```
+
+Follow backend logs:
+
+```bash
+gcloud beta run services logs tail ink-api \
+  --region=europe-west2
+```
+
+Cloud Run frontend logs:
+
+```bash
+gcloud run services logs read ink-frontend \
+  --region=europe-west2 \
+  --limit=50
+```
+
+Inspect service configuration:
+
+```bash
+gcloud run services describe ink-api \
+  --region=europe-west2
+```
+
+Logs must not include passwords, JWT secrets, database URLs, API keys, authorization headers, or access tokens.
+
+## Rollback
+
+Cloud Run keeps previous revisions for each service.
+
+List backend revisions:
+
+```bash
+gcloud run revisions list \
+  --service=ink-api \
+  --region=europe-west2
+```
+
+Route all backend traffic to a previous healthy revision:
+
+```bash
+gcloud run services update-traffic ink-api \
+  --region=europe-west2 \
+  --to-revisions=REVISION_NAME=100
+```
+
+List frontend revisions:
+
+```bash
+gcloud run revisions list \
+  --service=ink-frontend \
+  --region=europe-west2
+```
+
+Route all frontend traffic to a previous healthy revision:
+
+```bash
+gcloud run services update-traffic ink-frontend \
+  --region=europe-west2 \
+  --to-revisions=REVISION_NAME=100
+```
+
+After rollback, verify the health endpoint and a browser-based dictionary lookup.
+
+If the failed release included a database migration, do not assume service rollback is enough. Check whether the previous application revision is compatible with the current schema. If not, use a forward-fix migration or a carefully reviewed database restore/downgrade plan.
+
+## Common Issues
+
+### Backend cannot connect to PostgreSQL locally
+
+Check whether the database exists and whether `DATABASE_URL` points to the right host. Local direct runs usually use `postgresql+psycopg:///ink`; Docker Compose uses `postgresql+psycopg://postgres:postgres@postgres:5432/ink`.
+
+### Tests fail because `ink_test` does not exist
+
+Create the test database:
+
+```bash
+createdb ink_test
+```
+
+Or create it from `psql`:
+
+```sql
+CREATE DATABASE ink_test;
+```
+
+### Frontend calls the wrong backend
+
+Check `frontend/.env` for local development and the Docker build argument for deployed builds. Vite embeds `VITE_API_BASE_URL` at build time, so rebuilding the frontend image is required after changing the production backend URL.
+
+### Browser requests fail with CORS errors
+
+Confirm `CORS_ALLOWED_ORIGINS` contains the exact frontend origin, including scheme and host. Production must use the deployed frontend origin and must not use `*` or localhost.
+
+### Cloud Run starts but production settings fail validation
+
+Check `ENVIRONMENT`, `DATABASE_URL`, `JWT_SECRET_KEY`, `DEBUG`, and `CORS_ALLOWED_ORIGINS`. Production validation rejects the development JWT secret, the local database URL, `DEBUG=true`, empty CORS origins, wildcard CORS, and localhost production CORS origins.
+
+### Dictionary fallback does not run
+
+The Free Dictionary provider is primary. Merriam-Webster is only used for upstream failures such as timeouts, connection errors, or server errors. A normal word-not-found response remains a `404` and does not trigger fallback. If fallback should be available, set `MERRIAM_WEBSTER_API_KEY`.
+
+## Incident Checklist
+
+1. Confirm the reported user impact and affected component.
+2. Check `/health` for the backend.
+3. Check recent Cloud Run logs for `ink-api` or `ink-frontend`.
+4. Confirm the latest deployment revision and image tag.
+5. Check recent migrations if the failure involves database-backed behavior.
+6. Roll back Cloud Run traffic to the previous healthy revision if the latest revision is the likely cause.
+7. Verify recovery with `/health` and a real frontend dictionary lookup.
+8. Document the cause and follow-up fix in the issue or pull request.

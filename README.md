@@ -165,6 +165,11 @@ The frontend sends dictionary lookup requests to the backend using the API URL c
 
 The application is deployed on Google Cloud Platform, with both the frontend and backend running on Google Cloud Run.
 
+For copy-pasteable deployment, migration, logging, rollback, and incident-response commands, see:
+
+- [Operations Guide](docs/operations.md)
+- [Deployment Plan](docs/deployment-plan.md)
+
 ### Frontend
 
 The public React/Vite frontend is available at:
@@ -239,6 +244,10 @@ The production integration has been manually verified by:
 ## Current Status
 
 The project includes a deployed FastAPI backend, managed PostgreSQL database, public React/Vite frontend, dictionary provider fallback, production CORS configuration, automated tests, continuous backend deployment, and production logging.
+
+## Operations Documentation
+
+Operational workflows are documented in [docs/operations.md](docs/operations.md), including local setup, Docker Compose, environment variables, migrations, Cloud Run deployment, logs, rollback, and common failure cases.
 
 ## Run Backend with Docker
 
